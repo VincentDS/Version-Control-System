@@ -39,18 +39,17 @@ public class EchoClient {
 	
 	private static final String PROMPT = "> ";
 	private WorkingDirectory directory;
+	private Repository repository;
 
 	public EchoClient() throws IOException {
-		directory = new WorkingDirectory("/Users/vincentdeschutter");
+		directory = new WorkingDirectory("/Users/vincentdeschutter/Documents/Test");
 		run();
 	}
 	
 	public void run() throws IOException {
-
 		BufferedReader consoleInput = new BufferedReader(new InputStreamReader(System.in));
 		String input;
-		String answer;
-		
+		String answer;	
 		do {
 			System.out.print(PROMPT);
 			input = consoleInput.readLine();
@@ -72,7 +71,7 @@ public class EchoClient {
 				}
 			}
 		}
-		if (input.startsWith("cd")) {
+		else if (input.startsWith("cd")) {
 			String todirectory;
 			if (input.length() >= 3) {
 				todirectory = input.substring(3);
@@ -82,11 +81,57 @@ public class EchoClient {
 				directory.setWorkingDir("/Users/");
 			}
 		}
-		if (input.equals("pwd")) {
+		else if (input.equals("pwd")) {
 			answer = directory.getWorkingDir();
+		}
+		else if (input.startsWith("vcs")) {
+			if (input.length() >= 4) {
+				if ((repository == null) && (directory.exists(".vcs"))) {
+					repository = new Repository(directory);
+				}
+				answer = processVcs(input.substring(4));
+			}
 		}
 		return answer;
 	}
+	
+	public String processVcs(String command) throws IOException {
+		String answer = "";
+		if (command.equals("init")) {
+			if (repository == null) {
+				repository = new Repository(directory);
+				answer = "you initialized a new repository.";
+			}
+			else {
+				answer = "There exist already a repository in this project";
+			}
+		}
+		else if (command.startsWith("add")) {
+			String filename = command.substring(4);
+			if (repository != null) {
+				repository.add(filename);
+			}
+			else {
+				answer = "Please create a repository first.";
+			}
+		}
+		else if (command.startsWith("commit")) {
+			String message = "";
+			if (command.length() > 6) {
+				if (command.substring(7,9).equals("-m")) {
+					message = command.substring(10);
+				}
+			}
+			if (repository != null) {
+				repository.commit(message);
+			}
+			else {
+			answer = "Please create a repository first.";
+			}
+		}
+		return answer;
+	}
+	
 	
 	public void connectToServer(InetAddress ip, int port) throws UnknownHostException, IOException {
 		

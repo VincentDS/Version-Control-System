@@ -77,5 +77,9 @@ public class WorkingDirectory {
 	public boolean createFile(String name) throws IOException {
 		return new File(getWorkingDir() + File.separator + name).createNewFile();
 	}
+	
+	public boolean exists(String name) throws IOException {
+		return new File(getWorkingDir() + File.separator + name).exists();
+	}
 
 }
