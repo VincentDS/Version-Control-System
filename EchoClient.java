@@ -87,7 +87,7 @@ public class EchoClient {
 		else if (input.startsWith("vcs")) {
 			if (input.length() >= 4) {
 				if ((repository == null) && (directory.exists(".vcs"))) {
-					repository = new Repository(directory);
+					repository = new Repository("dummy", directory);
 				}
 				answer = processVcs(input.substring(4));
 			}
@@ -99,7 +99,7 @@ public class EchoClient {
 		String answer = "";
 		if (command.equals("init")) {
 			if (repository == null) {
-				repository = new Repository(directory);
+				repository = new Repository("dummy", directory);
 				answer = "you initialized a new repository.";
 			}
 			else {

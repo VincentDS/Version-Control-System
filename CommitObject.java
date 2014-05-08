@@ -14,14 +14,14 @@ import java.util.List;
  * 		- SHA1 ID, een 40-char string dat het object identificeert
  */
 public class CommitObject {
-	public Repository repo;
+	public ClientRepository repo;
 	public List<String> files;
 	public String message;
 	public String ID;
 	public CommitObject parent;
 	public String CurrentObjectDirectory;
 	
-	public CommitObject(Repository repo, CommitObject parent, String message) throws IOException {
+	public CommitObject(ClientRepository repo, CommitObject parent, String message) throws IOException {
 		this.repo = repo;
 		this.parent = parent;
 		this.message = message;
@@ -32,10 +32,10 @@ public class CommitObject {
 		ID = hash.getSHA1();
 		
 		//directory maken met deze ID
-	    CurrentObjectDirectory = repo.CommitObjectDirectory + File.separator + ID;
+	/*    CurrentObjectDirectory = repo.CommitObjectDirectory + File.separator + ID;
 		repo.directory.setWorkingDir(repo.CommitObjectDirectory);
 	    repo.directory.createDir(ID);
-		
+	*/	
 		//bestanden in de index kopieren naar de directory
 		repo.directory.setWorkingDir(CurrentObjectDirectory);
 	    for(int i=0; i<=files.size()-1; i++) {

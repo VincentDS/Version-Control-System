@@ -1,12 +1,13 @@
+import java.io.IOException;
+
 
 public interface VcsProtocol {
 	
-	public void init();
-	public void checkout();
-	public void add();
-	public void commit();
-	public void update();
-	public void status();
-	public void diff();
+	public String add(String filename) throws IOException;
+	public String checkout();
+	public String commit(String comment) throws IOException;
+	public String diff();
+	public String update();
+	public String status();
 	
 }

@@ -17,6 +17,7 @@ import java.util.List;
  * 		- adres van de repository op de server
  */
 public class Repository {
+	public String name;
 	public WorkingDirectory directory;
 	public List<String> index;
 	public CommitObject HEAD;
@@ -26,7 +27,8 @@ public class Repository {
 	public String CommitObjectDirectory;
 	
 	//De repository .vcs wordt gecreerd in de directory van het project (= init)
-	public Repository(WorkingDirectory directory) throws IOException {
+	public Repository(String name, WorkingDirectory directory) throws IOException {
+		this.name = name;
 		ProjectDirectory = directory.getWorkingDir();
 		VcsDirectory = ProjectDirectory + File.separator + ".vcs";
 		CommitObjectDirectory = VcsDirectory + File.separator + "commitobjects";
@@ -69,8 +71,8 @@ public class Repository {
 	public void commit(String message) throws IOException {
 		CommitObjectDirectory = VcsDirectory + File.separator + "commitobjects";
 		directory.setWorkingDir(ProjectDirectory);
-		CommitObject co = new CommitObject(this, HEAD, message);
-		HEAD = co;
+		//CommitObject co = new CommitObject(this, HEAD, message);
+		//HEAD = co;
 		//index file ledigen
 		index.clear();
 		putIndex();
