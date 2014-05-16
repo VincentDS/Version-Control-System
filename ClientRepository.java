@@ -4,12 +4,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 
-public class ClientRepository implements VcsProtocol {
+public class ClientRepository implements VcsProtocol, Serializable {
 
 	public WorkingDirectory directory;
 	public List<String> index;
@@ -47,11 +48,8 @@ public class ClientRepository implements VcsProtocol {
 		if (directory.exists(filename)) {
 			if (!index.contains(filename)) {
 				index.add(filename);
-				System.out.println(index.get(0));
 				//sorting the list, so we get the same hash value, no matter in which order we add the different files.
 				Collections.sort(index);
-				System.out.println(index.get(0));
-
 				putMeta("index");
 				answer = "this file is added to the staging area";
 			}
@@ -60,7 +58,7 @@ public class ClientRepository implements VcsProtocol {
 			}
 		}
 		else {
-			answer = "this file doensn't exsists";
+			answer = "this file doensn't exists";
 		}
 		return answer;
 	}
@@ -68,12 +66,6 @@ public class ClientRepository implements VcsProtocol {
 	
 	public String checkout() {
 		String answer = "";
-		
-		
-		answer = "0 Can't checkout";
-		
-		answer = "1 vcs checkout";
-		
 		return answer;
 	}
 
@@ -81,10 +73,8 @@ public class ClientRepository implements VcsProtocol {
 	public String commit(String message) throws IOException {
 		CommitObject co = new CommitObject(this, HEAD, message);
 		HEAD = co;
-		//index file ledigen
-		index.clear();
-		putMeta("index");
-		return "The files in the staging area were commited";
+		putMeta("head");
+		return "The files in the staging area were commited on clientside";
 	}
 
 	
@@ -101,8 +91,30 @@ public class ClientRepository implements VcsProtocol {
 
 	
 	public String status() {
-		// TODO Auto-generated method stub
-		return null;
+		String answer = "";
+		List<String> files;
+		if (this.HEAD != null) {
+			answer += "  Latest version : " + this.HEAD.ID + "\n \n";
+		} else {
+			answer += "  There is no previous version \n \n";
+		}
+		answer += "  Untracked files: \n    (Use \"vcs add <file>\" to include in what will be committed) \n";
+		
+		answer += "  Changes to be commited: \n";
+		if (this.index != null) {
+			files = this.HEAD.files;
+			for(int i=0; i<files.size(); i++) {
+				answer += "\t #" + files.get(i) + "\n";
+			}
+		} else {
+			answer += "\t no file will be commited";
+		}
+		return answer;
+	}
+	
+	public void emptyIndex() throws IOException {
+		index.clear();
+		putMeta("index");
 	}
 	
 	public void putMeta(String object) throws IOException {
@@ -124,7 +136,6 @@ public class ClientRepository implements VcsProtocol {
 		this.directory.setWorkingDir(VcsDirectory);
 		String path = directory.getWorkingDir() + File.separator + object;
 		FileInputStream fis = new FileInputStream(path);
-		System.out.println(path);
 		ObjectInputStream ois = new ObjectInputStream(fis);
 		try {
 			if (object.equals("index")) {

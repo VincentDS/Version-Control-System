@@ -1,8 +1,7 @@
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.List;
 
 
@@ -13,13 +12,15 @@ import java.util.List;
  * 		- Referentie naar een parent commit object 
  * 		- SHA1 ID, een 40-char string dat het object identificeert
  */
-public class CommitObject {
+public class CommitObject implements Serializable {
+
+	private static final long serialVersionUID = 1L;
 	public ClientRepository repo;
 	public List<String> files;
 	public String message;
 	public String ID;
 	public CommitObject parent;
-	public String CurrentObjectDirectory;
+	//public String CurrentObjectDirectory;
 	
 	public CommitObject(ClientRepository repo, CommitObject parent, String message) throws IOException {
 		this.repo = repo;
@@ -31,20 +32,11 @@ public class CommitObject {
 		SHA1 hash = new SHA1(FilesToByteArray(files));
 		ID = hash.getSHA1();
 		
-		//directory maken met deze ID
-	/*    CurrentObjectDirectory = repo.CommitObjectDirectory + File.separator + ID;
-		repo.directory.setWorkingDir(repo.CommitObjectDirectory);
-	    repo.directory.createDir(ID);
-	*/	
-		//bestanden in de index kopieren naar de directory
-		repo.directory.setWorkingDir(CurrentObjectDirectory);
-	    for(int i=0; i<=files.size()-1; i++) {
-	    	String path = repo.ProjectDirectory + File.separator + files.get(i);
-	    	repo.directory.putFile(path);  	
-	    }
-	    
-		//info file met message, parent, id aanmaken en in de directory zetten
-	    MetaFile();
+	   // MetaFile();
+	}
+	
+	public boolean equals(CommitObject co) {
+		return ID.equals(co.ID);
 	}
 	
 	//Makes a bytearray from all the files that are in the staging area
@@ -67,27 +59,6 @@ public class CommitObject {
 			fis.close();
 		}
 		return buffer;
-	}
-	
-	//creates a metafile in a CommitObject-folder with the message, ID(SHA1) and the ID of the parent
-	public void MetaFile() {
-		try {
-			File file = new File(CurrentObjectDirectory + File.separator + ".meta");
-			if (!file.exists()) {
-				file.createNewFile();
-			}
-			FileWriter fw = new FileWriter(file.getAbsoluteFile());
-			BufferedWriter bw = new BufferedWriter(fw);
-			bw.write("Message: " + message + "\n");
-			bw.write("ID: " + ID + "\n");
-			//parent is null when there is no previous commit. 
-			if (parent != null) {
-				bw.write("Parent: " + parent.ID + "\n");
-			}
-			bw.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 	}
 	
 	final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();

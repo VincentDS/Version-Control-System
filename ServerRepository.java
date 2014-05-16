@@ -1,26 +1,28 @@
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 
 
-public class ServerRepository implements VcsProtocol {
+public class ServerRepository {
 	
 	public WorkingDirectory directory;
+	File head;
 	public CommitObject HEAD;
 		
 	public String ProjectDirectory;
-	public String CommitObjectDirectory;
+	
 		
 	//De repository .vcs wordt gecreerd in de directory van het project (= init)
 	public ServerRepository(WorkingDirectory directory) throws IOException {
 			ProjectDirectory = directory.getWorkingDir();
-			CommitObjectDirectory = ProjectDirectory + File.separator + "commitobjects";
 			this.directory = directory;
-			if (!directory.exists("commitobjects")) {
-				this.directory.createDir("commitobjects"); //commitobjects directory aanmaken
+			head = new File(ProjectDirectory + File.separator + "head");
+			if (!head.exists()) {
 				this.directory.createFile("head"); //de head file aanmaken
 				putHead();
 			}
@@ -29,13 +31,8 @@ public class ServerRepository implements VcsProtocol {
 			}
 		}
 		
-		public String add(String filename) throws IOException {
-			return "1 vcs add " + filename;
-		}
-		
 		public String checkout() {
-			//HEAD commit doorsturen naar de client (als deze niet null is = lege repository)
-			return "1 vcs checkout";			
+			return "";
 		}
 		
 		
@@ -61,17 +58,14 @@ public class ServerRepository implements VcsProtocol {
 		
 
 		public void putHead() throws IOException {
-			String path = directory.getWorkingDir() + File.separator + "head";
-			FileOutputStream fos = new FileOutputStream(path);
+			FileOutputStream fos = new FileOutputStream(head);
 			ObjectOutputStream oos = new ObjectOutputStream(fos);
 			oos.writeObject(HEAD);
 			oos.close();
 		}
 		
-		@SuppressWarnings("unchecked")
 		public void getHead() throws IOException {
-			String path = directory.getWorkingDir() + File.separator + "head";
-			FileInputStream fis = new FileInputStream(path);
+			FileInputStream fis = new FileInputStream(head);
 			ObjectInputStream ois = new ObjectInputStream(fis);
 			try {
 				HEAD = (CommitObject)ois.readObject();
@@ -82,5 +76,24 @@ public class ServerRepository implements VcsProtocol {
 			}
 			ois.close();	
 		}
-
+		
+		public void putMetaFile(CommitObject co) {
+			try {
+				File file = new File(ProjectDirectory + File.separator + co.ID + File.separator + ".meta");
+				if (!file.exists()) {
+					file.createNewFile();
+				}
+				FileWriter fw = new FileWriter(file.getAbsoluteFile());
+				BufferedWriter bw = new BufferedWriter(fw);
+				bw.write("Message: " + co.message + "\n");
+				bw.write("ID: " + co.ID + "\n");
+				//parent is null when there is no previous commit. 
+				if (co.parent != null) {
+					bw.write("Parent: " + co.parent.ID + "\n");
+				}
+				bw.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 }
