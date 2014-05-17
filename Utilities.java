@@ -1,11 +1,23 @@
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.util.LinkedList;
+import java.util.List;
 
+
+
+/*
+ * Compile in terminal: javac -cp external/diffutils-1.2.1.jar *.java
+ * Run in terminal: 
+ * 		Server: java -cp .:external/diffutils-1.2.1.jar VcsServer 8080
+ * 		Client: java -cp .:external/diffutils-1.2.1.jar VcsClient
+ */
 
 public class Utilities {
 
@@ -53,5 +65,19 @@ public class Utilities {
 			e.printStackTrace();
 		}
 	}
+	
+	public static List<String> fileToLines(String filename) {
+        List<String> lines = new LinkedList<String>();
+        String line = "";
+        try {
+                BufferedReader in = new BufferedReader(new FileReader(filename));
+                while ((line = in.readLine()) != null) {
+                        lines.add(line);
+                }
+        } catch (IOException e) {
+                e.printStackTrace();
+        }
+        return lines;
+}
 }
 

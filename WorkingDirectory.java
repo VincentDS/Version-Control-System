@@ -7,6 +7,10 @@ import java.io.Serializable;
 
 public class WorkingDirectory implements Serializable {
 
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -3983075766119828756L;
 	private File current;
 		
 	public WorkingDirectory(String path) {
@@ -69,6 +73,13 @@ public class WorkingDirectory implements Serializable {
 		return copyFile(filepath, newfilepath);
 	}
 	
+	public boolean cleanDir() throws IOException {
+		for (File file: current.listFiles()) {
+			file.delete();
+		}
+		return true;
+	}
+
 	public boolean createDir(String name) throws IOException {
 		File filename = new File(getWorkingDir() + File.separator + name);
 		return filename.mkdir();

@@ -20,10 +20,10 @@ public class VcsServer {
 
 	}
 
-	public void acceptClient() throws IOException {
+	public void acceptClient(int clientNumber) throws IOException {
 		Socket clientSocket = serverSocket.accept(); // blocks
-		ServerSession session = new ServerSession(this, clientSocket);
-		System.out.println("Server: client connected");
+		ServerSession session = new ServerSession(this, clientSocket, clientNumber);
+		System.out.println("Server: client"+ clientNumber +" connected");
 		session.start(); // starts a new thread
 		// return immediately
 	}
@@ -34,12 +34,15 @@ public class VcsServer {
 			return;
 		}
 		int port = Integer.parseInt(args[0]);
+		int numberOfClients = 0;
 
 		System.out.println("Server: waiting for clients on port "+port);
 		VcsServer server = new VcsServer(port);
 
+		
 		while (true) {
-			server.acceptClient();
+			numberOfClients++;
+			server.acceptClient(numberOfClients);
 		}
 	}
 

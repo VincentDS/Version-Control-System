@@ -13,12 +13,14 @@ public class ServerSession extends Thread {
 		public WorkingDirectory directory;
 		public String MainDirectory;
 		public ServerRepository srepo;
+		public int clientNumber;
 
 		private final Socket clientSocket;
 		ObjectInputStream clientInputStream;
 		ObjectOutputStream clientOutputStream;
 
-		public ServerSession(VcsServer server, Socket clientSocket) throws IOException {
+		public ServerSession(VcsServer server, Socket clientSocket, int clientNumber) throws IOException {
+			this.clientNumber = clientNumber;
 			this.server = server;
 			directory = server.directory;
 			MainDirectory = server.directory.getWorkingDir();
@@ -49,8 +51,7 @@ public class ServerSession extends Thread {
 					if (clientInput != null) {
 
 						// log the string on the local console
-						System.out.println("Server: client sent '" +
-								clientInput + "'");
+						System.out.println("Server: client" + clientNumber +" sent '" + clientInput + "'");
 
 						// send back the string to the client
 						String serveranswer = processClientInput(clientInput);
@@ -67,7 +68,7 @@ public class ServerSession extends Thread {
 
 			} finally {
 				// tear down communication
-				System.err.println("Server: closing client connection");
+				System.err.println("Server: closing client" + clientNumber +" connection");
 				try {
 					this.clientSocket.close();
 				} catch (IOException e) { /* ignore */ }
@@ -89,7 +90,7 @@ public class ServerSession extends Thread {
 					answer = "There exist already a repository in this project";
 				}
 			}
-			else if (command.equals("checkout")) {
+			else if (command.equals("checkout") || command.equals("update")) {
 				if (srepo != null) {
 					List<String> files = null;
 					try {
@@ -101,7 +102,6 @@ public class ServerSession extends Thread {
 						int numberOfFiles = 0;
 						String ID = null;
 						if (srepo.HEAD != null) {
-							System.out.println("testje1");
 							ID = srepo.HEAD.ID;
 							files = srepo.HEAD.files;
 							numberOfFiles = files.size();
@@ -109,10 +109,14 @@ public class ServerSession extends Thread {
 						clientOutputStream.writeObject(numberOfFiles);
 						clientOutputStream.flush();
 				        for (int i = 0; i < numberOfFiles; i++) {
-							System.out.println("testje2");
 							Utilities.sendFile(MainDirectory + File.separator + ID + File.separator + files.get(i), clientOutputStream);	
 				        }
-				        answer = "The repository is succesfully sent";
+				        if (command.equals("update")) {
+				        	answer = "Your workingcopy is succesfully updated";
+				        }
+				        else {
+				        	answer = "You now have a workingcopy of the repository";
+				        }
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
@@ -163,7 +167,6 @@ public class ServerSession extends Thread {
 				}
 			}
 			return answer;
-
 		}
 		
 	}

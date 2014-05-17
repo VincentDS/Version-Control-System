@@ -31,7 +31,7 @@ public class VcsClient {
 
 	
 	public VcsClient() throws IOException {
-		directory = new WorkingDirectory("/Users/vincentdeschutter/Documents/Test/Client");
+		directory = new WorkingDirectory("/Users/vincentdeschutter/Documents/Test/Client1");
 		MainDirectory = directory.getWorkingDir();
 	}
 	
@@ -70,6 +70,7 @@ public class VcsClient {
 			else {
 				directory.setWorkingDir("/Users/");
 			}
+			crepo = null;
 		}
 		else if (input.equals("pwd")) {
 			answer = directory.getWorkingDir();
@@ -84,10 +85,10 @@ public class VcsClient {
 					}
 					InetAddress ip = InetAddress.getByName(tokens[0]);
 					int port = Integer.parseInt(tokens[1]);
-					System.out.println("connecting to server at "+ip+":"+port);
+					System.out.println("connecting to server at "+ip+":"+port+"...");
 					this.connectToServer(ip, port);
 				} catch (Exception e) {
-					e.printStackTrace();
+					answer = "The connection with the server could not be established. Please check if the server is running and you gave the correct address/ip";
 				}
 			} else {
 				answer = "You are already connected to the server";
@@ -140,7 +141,19 @@ public class VcsClient {
 				answer = "Please connect to the server";
 			}
 		}
-		if (command.equals("init")) {
+		else if (command.equals("update")) {
+			if (connectedToServer) {
+				if (crepo != null) {
+					answer = update();
+				}
+				else {
+					answer = "There is no workingcopy found in this folder, please checkout first";
+				}
+			} else {
+				answer = "Please connect to the server";
+			}
+		}
+		else if (command.equals("init")) {
 			if (connectedToServer) {
 				answer = sendToServer("init");
 			} else {
@@ -156,6 +169,15 @@ public class VcsClient {
 				answer = "No repository found, please checkout first";
 			}
 		}
+		else if (command.startsWith("remove")) {
+			String filename = command.substring(7);
+			if (crepo != null) {
+				answer = crepo.remove(filename);
+			}
+			else {
+				answer = "No repository found, please checkout first";
+			}
+		} 
 		else if (command.startsWith("commit")) {
 			String message = "";
 			if (connectedToServer) {
@@ -208,9 +230,45 @@ public class VcsClient {
 				CommitObject newhead = (CommitObject) serverObjectInput.readObject();
 				crepo = new ClientRepository(directory, newhead);
 				int numberOfFiles = (Integer) serverObjectInput.readObject();
+				crepo.directory.setWorkingDir(crepo.HeadFilesDirectory);
+				crepo.directory.cleanDir();
 				for(int i=0; i<numberOfFiles; i++) {
-					Utilities.receiveFile(serverObjectInput, MainDirectory);
+					Utilities.receiveFile(serverObjectInput, crepo.HeadFilesDirectory);
 				}
+				crepo.transferHeadFiles(consoleInput);
+				serverReply = (String) serverObjectInput.readObject();
+				answer = serverReply;	
+			}
+			else {
+				answer = serverReply;
+			}
+		}
+		catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return answer; 
+	}
+	
+	public String update() throws IOException {
+		String answer = "";
+		serverObjectOutput.writeUTF("update");
+		serverObjectOutput.flush();	
+
+		String serverReply = null;
+		try {
+			serverReply = (String) serverObjectInput.readObject();
+
+			if (serverReply.equals("ok")) {
+				CommitObject newhead = (CommitObject) serverObjectInput.readObject();
+				crepo.HEAD = newhead;
+				int numberOfFiles = (Integer) serverObjectInput.readObject();
+				crepo.directory.setWorkingDir(crepo.HeadFilesDirectory);
+				crepo.directory.cleanDir();
+				for(int i=0; i<numberOfFiles; i++) {
+					Utilities.receiveFile(serverObjectInput, crepo.HeadFilesDirectory);
+				}
+				crepo.transferHeadFiles(consoleInput);
 				serverReply = (String) serverObjectInput.readObject();
 				answer = serverReply;	
 			}
@@ -253,10 +311,11 @@ public class VcsClient {
 					serverObjectOutput.writeObject(files.size());
 					serverObjectOutput.flush();
 					for(int i=0; i<files.size(); i++) {
-						Utilities.sendFile(MainDirectory + File.separator + files.get(i), serverObjectOutput);
+						Utilities.sendFile(crepo.ProjectDirectory + File.separator + files.get(i), serverObjectOutput);
 					}
 					serverObjectOutput.writeObject("succes");
 					serverObjectOutput.flush();	
+					crepo.putHeadFiles();
 					crepo.emptyIndex();
 					serverReply = (String) serverObjectInput.readObject();
 					answer = serverReply;
