@@ -5,25 +5,22 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.util.List;
+import java.security.PublicKey;
 
 public class ServerSession extends Thread {
 
-		public VcsServer server;
 		public WorkingDirectory directory;
 		public String MainDirectory;
-		public ServerRepository srepo;
 		public int clientNumber;
 
 		private final Socket clientSocket;
-		ObjectInputStream clientInputStream;
-		ObjectOutputStream clientOutputStream;
+		ObjectInputStream clientObjectInput;
+		ObjectOutputStream clientObjectOutput;
 
 		public ServerSession(VcsServer server, Socket clientSocket, int clientNumber) throws IOException {
 			this.clientNumber = clientNumber;
-			this.server = server;
-			directory = server.directory;
-			MainDirectory = server.directory.getWorkingDir();
+			directory = VcsServer.directory;
+			MainDirectory = VcsServer.directory.getWorkingDir();
 			this.clientSocket = clientSocket;
 		}
 
@@ -37,17 +34,26 @@ public class ServerSession extends Thread {
 
 				// wrap streams in Readers and Writers to read and write
 				// text Strings rather than individual bytes 
-				clientOutputStream = new ObjectOutputStream(rawOutput);
-				//clientOutputStream.flush();
-				clientInputStream = new ObjectInputStream(rawInput);
+				clientObjectOutput = new ObjectOutputStream(rawOutput);
+				//clientObjectOutput.flush();
+				clientObjectInput = new ObjectInputStream(rawInput);
 
+				File keyDir = new File(MainDirectory + File.separator + ".client" + clientNumber);
+				keyDir.mkdir();
+				PublicKey publicKey = RSA.generateKeys(keyDir.getAbsolutePath());
+				clientObjectOutput.writeUTF("client" + clientNumber);
+				clientObjectOutput.flush();	
+				RSA.receivePublicKey(keyDir.getAbsolutePath(), clientObjectInput);
+				clientObjectOutput.writeObject(publicKey);
+				clientObjectOutput.flush();
+				
 				
 				while (true) {
-					
+
 					// read string from client
 					String clientInput = null;
-					clientInput = clientInputStream.readUTF();
-					
+					clientInput = clientObjectInput.readUTF();
+
 					if (clientInput != null) {
 
 						// log the string on the local console
@@ -56,11 +62,11 @@ public class ServerSession extends Thread {
 						// send back the string to the client
 						String serveranswer = processClientInput(clientInput);
 
-						clientOutputStream.writeObject(serveranswer);
+						clientObjectOutput.writeObject(serveranswer);
 
 						// make sure the output is sent to the client before closing
 						// the stream
-						clientOutputStream.flush();		
+						clientObjectOutput.flush();		
 					}
 				}
 
@@ -78,89 +84,37 @@ public class ServerSession extends Thread {
 
 		public String processClientInput(String command) throws IOException {
 			String answer = "";
-			if ((srepo == null) && (new File(MainDirectory + File.separator + "head").exists())) {
-				srepo = new ServerRepository(directory);
+			if ((VcsServer.srepo == null) && (new File(MainDirectory + File.separator + "head").exists())) {
+				VcsServer.init();
 			}				
 			if (command.equals("init")) {
-				if (srepo == null) {
-					srepo = new ServerRepository(directory);
+				if (VcsServer.srepo == null) {
+					VcsServer.init();
 					answer = "You initialized a new repository";
 				}
 				else {
 					answer = "There exist already a repository in this project";
 				}
 			}
-			else if (command.equals("checkout") || command.equals("update")) {
-				if (srepo != null) {
-					List<String> files = null;
-					try {
-						clientOutputStream.writeObject("ok");
-						clientOutputStream.flush();	
-						clientOutputStream.writeObject(srepo.HEAD);
-						clientOutputStream.flush();
-						
-						int numberOfFiles = 0;
-						String ID = null;
-						if (srepo.HEAD != null) {
-							ID = srepo.HEAD.ID;
-							files = srepo.HEAD.files;
-							numberOfFiles = files.size();
-						}
-						clientOutputStream.writeObject(numberOfFiles);
-						clientOutputStream.flush();
-				        for (int i = 0; i < numberOfFiles; i++) {
-							Utilities.sendFile(MainDirectory + File.separator + ID + File.separator + files.get(i), clientOutputStream);	
-				        }
-				        if (command.equals("update")) {
-				        	answer = "Your workingcopy is succesfully updated";
-				        }
-				        else {
-				        	answer = "You now have a workingcopy of the repository";
-				        }
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
+			else if (command.equals("checkout")) {
+				if (VcsServer.srepo != null) {
+					answer = VcsServer.srepo.update(clientObjectOutput, clientObjectInput, clientNumber, false);
+				}
+				else {
+					answer = "Please create a repository first";
+				}
+			}
+			else if (command.equals("update")) {
+				if (VcsServer.srepo != null) {
+					answer = VcsServer.srepo.update(clientObjectOutput, clientObjectInput, clientNumber, true);
 				}
 				else {
 					answer = "Please create a repository first";
 				}
 			}
 			else if (command.startsWith("commit")) {
-				if (srepo != null) {				
-					try {
-						CommitObject oldhead = (CommitObject) clientInputStream.readObject();
-
-						//kijken of de vorige head op de clientside gelijk is aan de huidige head op de server
-						// --> deze client is de eerste die iets aanpast aan de server
-						if (srepo.HEAD == null || srepo.HEAD.equals(oldhead)) {
-							clientOutputStream.writeObject("ok");
-							clientOutputStream.flush();
-							CommitObject newhead = (CommitObject) clientInputStream.readObject();
-							String ID = newhead.ID;
-							srepo.HEAD = newhead;
-							srepo.putHead();
-							directory.createDir(ID);
-							directory.changeWorkingDir(MainDirectory + File.separator + ID);
-							srepo.putMetaFile(newhead);
-							int numberOfFiles = (Integer) clientInputStream.readObject();
-							for(int i=0; i<numberOfFiles; i++) {
-								Utilities.receiveFile(clientInputStream, MainDirectory + File.separator + ID);
-							}
-							String clientStatus = (String) clientInputStream.readObject();
-							if (clientStatus.equals("succes")) {
-								answer = "The files are succesfully commited";
-							} else {
-								answer = "Something went wrong while transferring the files";
-							}
-							
-						} else {
-							answer = "You don't have the latest version, please update your working directory";
-						}		
-						
-					} catch (ClassNotFoundException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
+				if (VcsServer.srepo != null) {				
+					answer = VcsServer.srepo.commit(clientObjectOutput, clientObjectInput, clientNumber);
 				}
 				else {
 					answer = "Please create a repository first";

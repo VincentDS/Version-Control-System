@@ -11,23 +11,24 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.List;
+import java.security.PublicKey;
 
 public class VcsClient {
 	
-	WorkingDirectory directory;
-	String MainDirectory;
+	public WorkingDirectory directory;
+	public String MainDirectory;
 	public ClientRepository crepo;
+	public String author;
 	private static final String PROMPT = "> ";
 	boolean connectedToServer = false;
 	
-	BufferedReader consoleInput;
+	private BufferedReader consoleInput;
 	
 	
-	InetSocketAddress serverAddress;		
-	Socket socket;
-	ObjectInputStream serverObjectInput;
-	ObjectOutputStream serverObjectOutput;
+	private InetSocketAddress serverAddress;		
+	private Socket socket;
+	private ObjectInputStream serverObjectInput;
+	private ObjectOutputStream serverObjectOutput;
 
 	
 	public VcsClient() throws IOException {
@@ -132,7 +133,9 @@ public class VcsClient {
 		if (command.equals("checkout")) {
 			if (connectedToServer) {
 				if (crepo == null) {
-					answer = checkout();
+					CommitObject HEAD = null;
+					crepo = new ClientRepository(directory, HEAD);
+					answer = crepo.update(serverObjectOutput, serverObjectInput, consoleInput, true);
 				}
 				else {
 					answer = "There is already a workingcopy of the repository in this folder, you can just update your workingcopy";
@@ -144,7 +147,7 @@ public class VcsClient {
 		else if (command.equals("update")) {
 			if (connectedToServer) {
 				if (crepo != null) {
-					answer = update();
+					answer = crepo.update(serverObjectOutput, serverObjectInput, consoleInput, false);
 				}
 				else {
 					answer = "There is no workingcopy found in this folder, please checkout first";
@@ -185,7 +188,7 @@ public class VcsClient {
 					if (command.length() > 6) {
 						if (command.substring(7,9).equals("-m")) {
 							message = command.substring(10);
-							answer = commit(message);
+							answer = crepo.commit(serverObjectOutput, serverObjectInput, message, author);
 						}
 					}
 				}
@@ -217,124 +220,7 @@ public class VcsClient {
 		return answer;
 	}
 	
-	public String checkout() throws IOException {
-		String answer = "";
-		serverObjectOutput.writeUTF("checkout");
-		serverObjectOutput.flush();	
-
-		String serverReply = null;
-		try {
-			serverReply = (String) serverObjectInput.readObject();
-
-			if (serverReply.equals("ok")) {
-				CommitObject newhead = (CommitObject) serverObjectInput.readObject();
-				crepo = new ClientRepository(directory, newhead);
-				int numberOfFiles = (Integer) serverObjectInput.readObject();
-				crepo.directory.setWorkingDir(crepo.HeadFilesDirectory);
-				crepo.directory.cleanDir();
-				for(int i=0; i<numberOfFiles; i++) {
-					Utilities.receiveFile(serverObjectInput, crepo.HeadFilesDirectory);
-				}
-				crepo.transferHeadFiles(consoleInput);
-				serverReply = (String) serverObjectInput.readObject();
-				answer = serverReply;	
-			}
-			else {
-				answer = serverReply;
-			}
-		}
-		catch (ClassNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return answer; 
-	}
 	
-	public String update() throws IOException {
-		String answer = "";
-		serverObjectOutput.writeUTF("update");
-		serverObjectOutput.flush();	
-
-		String serverReply = null;
-		try {
-			serverReply = (String) serverObjectInput.readObject();
-
-			if (serverReply.equals("ok")) {
-				CommitObject newhead = (CommitObject) serverObjectInput.readObject();
-				crepo.HEAD = newhead;
-				int numberOfFiles = (Integer) serverObjectInput.readObject();
-				crepo.directory.setWorkingDir(crepo.HeadFilesDirectory);
-				crepo.directory.cleanDir();
-				for(int i=0; i<numberOfFiles; i++) {
-					Utilities.receiveFile(serverObjectInput, crepo.HeadFilesDirectory);
-				}
-				crepo.transferHeadFiles(consoleInput);
-				serverReply = (String) serverObjectInput.readObject();
-				answer = serverReply;	
-			}
-			else {
-				answer = serverReply;
-			}
-		}
-		catch (ClassNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return answer; 
-	}
-	
-
-	public String commit(String message) throws IOException {
-		String answer = "";
-		CommitObject oldhead = crepo.HEAD;
-		List<String> files = crepo.index;
-
-		if (!files.isEmpty()) {
-			//commiten op client-side
-			crepo.commit(message);
-			CommitObject newhead = crepo.HEAD;
-
-			//commit doorsturen naar server
-			serverObjectOutput.writeUTF("commit");
-			serverObjectOutput.flush();	
-			serverObjectOutput.writeObject(oldhead);
-			serverObjectOutput.flush();	
-
-
-			String serverReply = null;
-			try {
-				serverReply = (String) serverObjectInput.readObject();
-
-				if (serverReply.equals("ok")) {
-					serverObjectOutput.writeObject(newhead);
-					serverObjectOutput.flush();
-					serverObjectOutput.writeObject(files.size());
-					serverObjectOutput.flush();
-					for(int i=0; i<files.size(); i++) {
-						Utilities.sendFile(crepo.ProjectDirectory + File.separator + files.get(i), serverObjectOutput);
-					}
-					serverObjectOutput.writeObject("succes");
-					serverObjectOutput.flush();	
-					crepo.putHeadFiles();
-					crepo.emptyIndex();
-					serverReply = (String) serverObjectInput.readObject();
-					answer = serverReply;
-				} else {
-					answer = serverReply;
-				} 
-			}
-			catch (ClassNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		} else {
-			answer = "There are no files in the staging area, please add one or more files before you commit";
-		}
-
-		return answer;
-	}
-
-
 	public void connectToServer(InetAddress ip, int port) throws UnknownHostException, IOException {
 		
 		serverAddress = new InetSocketAddress(ip, port);		 
@@ -351,8 +237,15 @@ public class VcsClient {
 			serverObjectOutput = new ObjectOutputStream(rawOutput);
 			serverObjectInput = new ObjectInputStream(rawInput);
 			
+			PublicKey publicKey = RSA.generateKeys(directory.getWorkingDir());
+			author = serverObjectInput.readUTF();
+			serverObjectOutput.writeObject(publicKey);
+			serverObjectOutput.flush();
+			RSA.receivePublicKey(directory.getWorkingDir(), serverObjectInput);
+
+			
 			 //Display the welcome-text
-			System.out.println("You are now connected with the Version Control System server!");
+			System.out.println("You are now connected with the Version Control System server as " + author + "!");
 			connectedToServer = true;
 
 		} catch (Exception e) {

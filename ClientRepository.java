@@ -6,13 +6,17 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 
+import difflib.DiffRow;
+import difflib.DiffRowGenerator;
 
-public class ClientRepository implements VcsProtocol, Serializable {
+
+public class ClientRepository implements Serializable {
 	
 	private static final long serialVersionUID = -477189107700903771L;
 	public WorkingDirectory directory;
@@ -39,6 +43,7 @@ public class ClientRepository implements VcsProtocol, Serializable {
 			putMeta("index");
 			putMeta("head");
 			this.directory.setWorkingDir(ProjectDirectory);
+			
 		}
 		else {
 			this.directory.setWorkingDir(ProjectDirectory);
@@ -91,69 +96,153 @@ public class ClientRepository implements VcsProtocol, Serializable {
 	} 
 
 	
-	public String checkout() {
+	public String update(ObjectOutputStream output, ObjectInputStream input, BufferedReader consoleInput, boolean checkout) throws IOException {
 		String answer = "";
-		return answer;
-	}
+		if (checkout) {
+			output.writeUTF("checkout");
+		} else {
+			output.writeUTF("update");
+		}
+		output.flush();	
 
+		String serverReply = null;
+		try {
+			serverReply = (String) input.readObject();
+
+			if (serverReply.equals("ok")) {
+				CommitObject newhead = (CommitObject) input.readObject();
+				HEAD = newhead;
+				int numberOfFiles = (Integer) input.readObject();
+				directory.setWorkingDir(HeadFilesDirectory);
+				directory.cleanDir();
+				String keyPath = ProjectDirectory + File.separator + ".my_private.key";
+				ObjectInputStream inputStream = new ObjectInputStream(new FileInputStream(keyPath));
+			    PrivateKey privateKey = (PrivateKey) inputStream.readObject();
+			    inputStream.close();
+				for(int i=0; i<numberOfFiles; i++) {
+					Utilities.receiveFile(input, HeadFilesDirectory, privateKey);
+				}
+				transferHeadFiles(consoleInput);
+				serverReply = (String) input.readObject();
+				answer = serverReply;	
+			}
+			else {
+				answer = serverReply;
+			}
+		}
+		catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return answer; 
+	}
 	
-	public String commit(String message) throws IOException {
-		CommitObject co = new CommitObject(this, HEAD, message);
+	public String commitLocal(String message, String author) throws IOException {
+		CommitObject co = new CommitObject(this, HEAD, message, author);
 		HEAD = co;
 		putMeta("head");
 		return "The files in the staging area were commited on clientside";
 	}
+	
+	public String commit(ObjectOutputStream output, ObjectInputStream input, String message, String author) throws IOException {
+		String answer = "";
+		CommitObject oldhead = HEAD;
+		List<String> files = index;
+
+		if (!files.isEmpty()) {
+			//commiten op client-side
+			commitLocal(message, author);
+			CommitObject newhead = HEAD;
+
+			//commit doorsturen naar server
+			output.writeUTF("commit");
+			output.flush();	
+			output.writeObject(oldhead);
+			output.flush();	
+
+
+			String serverReply = null;
+			try {
+				serverReply = (String) input.readObject();
+
+				if (serverReply.equals("ok")) {
+					output.writeObject(newhead);
+					output.flush();
+					output.writeObject(files.size());
+					output.flush();
+					String keyPath = ProjectDirectory + File.separator + ".received_public.key";
+					ObjectInputStream inputStream = new ObjectInputStream(new FileInputStream(keyPath));
+				    PublicKey publicKey = (PublicKey) inputStream.readObject();
+				    inputStream.close();
+					for(int i=0; i<files.size(); i++) {
+						Utilities.sendFile(ProjectDirectory + File.separator + files.get(i), output, publicKey);
+					}
+					output.writeObject("succes");
+					output.flush();	
+					putHeadFiles();
+					emptyIndex();
+					serverReply = (String) input.readObject();
+					answer = serverReply;
+				} else {
+					answer = serverReply;
+				} 
+			}
+			catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} else {
+			answer = "There are no files in the staging area, please add one or more files before you commit";
+		}
+
+		return answer;
+	}
 
 	
-	public String diff() {
+	public String diff() throws IOException {
 		String answer = "";
-		
+
 		answer += "    Difference between the current Project-Directory and the latest version (ID: " + HEAD.ID +") \n \n";
-		
+
 		File directory = new File(ProjectDirectory);
 		File[] fileList = directory.listFiles();
 		if (fileList.length-index.size() != 2) {
 			for (File projectfile : fileList) {
-				if (projectfile.isFile() && (!projectfile.getName().equals(".DS_Store"))) {
+				String projectfileName = projectfile.getName();
+				String extension = projectfileName.substring(projectfileName.lastIndexOf(".") + 1, projectfileName.length());
+				if (projectfile.isFile() && (!projectfileName.equals(".DS_Store")) && (!extension.equals("key"))) {
 					answer += "\t" + projectfile.getName() + ": \n";
 					File versionfile = new File(HeadFilesDirectory + File.separator + projectfile.getName());
+
 					if (versionfile.isFile()) {
-						
-						/*//if a file in the project directory was already in the latest version: show the difference
-						List<String> original = Utilities.fileToLines(versionfile.getAbsolutePath());
-		                List<String> revised  = Utilities.fileToLines(projectfile.getAbsolutePath());
-		                
-		                // Compute diff. Get the Patch object. Patch is the container for computed deltas.
-		                difflib.Patch patch = DiffUtils.diff(original, revised);
 
-		                for (Delta delta: patch.getDeltas()) {
-		                	if (delta == null) {
-		                		answer += "   " + delta;
-		                	} else {
-		                		answer += "\t   #There are no changes in this file";
-		                	}
-		                	answer += "\n \n";
-		                }*/
-						
-		/*				diff_match_patch dmp = new diff_match_patch();
-						dmp.Diff_Timeout = 16;
-						LinesToCharsResult diffs = dmp.diff_linesToChars("lol \n hey", "lal");
-						diff_cleanupSemantic(diffs);
-						String diff = dmp.diff_toDelta(diffs);
-						System.out.println(diff);
-						
-						  var a = dmp.diff_linesToChars_(text1, text2);
-						  var lineText1 = a[0];
-						  var lineText2 = a[1];
-						  var lineArray = a[2];
+						SHA1 projectfileHash = new SHA1(Utilities.FileToByteArray(projectfile));
+						SHA1 versionfileHash = new SHA1(Utilities.FileToByteArray(versionfile));
 
-						  var diffs = dmp.diff_main(lineText1, lineText2, false);
+						if (!versionfileHash.getSHA1().equals(projectfileHash.getSHA1())) {
 
-						  dmp.diff_charsToLines_(diffs, lineArray);
-						  return diffs;
-						  */
+							//if a file in the project directory was already in the latest version: show the difference
+							List<String> original = Utilities.fileToLines(versionfile.getAbsolutePath());
+							List<String> revised  = Utilities.fileToLines(projectfile.getAbsolutePath());
 
-						
+							DiffRowGenerator.Builder builder = new DiffRowGenerator.Builder();             
+							boolean sideBySide = true;  //default -> inline
+							builder.showInlineDiffs(!sideBySide); 
+							builder.columnWidth(120);
+							DiffRowGenerator dfg = builder.build();                
+							List<DiffRow> rows = dfg.generateDiffRows(original, revised);    
+
+							int rowNumber = 0;
+							for (DiffRow row: rows) {
+								rowNumber++;
+								if (!row.toString().equals("")) {
+									answer += "\t   Line " + rowNumber +": " + row + "\n";
+								}
+							}
+							answer += "\n";
+						} else {
+							answer += "\t   #There are no changes in this file \n \n";
+						}
 					} else {
 						//if a file in the project directory was not in the latest version: file is recently added
 						answer += "\t   #This file is recently added to the project \n \n";
@@ -163,22 +252,14 @@ public class ClientRepository implements VcsProtocol, Serializable {
 		} else {
 			answer += "\t there are no files in the repository to diff with the latest version \n";
 		}
-		
 		return answer;
 	}
-
-	
-	public String update() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
 	
 	public String status() {
 		String answer = "";
 		List<String> files = index;
 		if (HEAD != null) {
-			answer += "  Latest version : \n     ID: " + HEAD.ID + "\n     Message: " + HEAD.message + "\n";
+			answer += "  Latest version : \n     ID: " + HEAD.ID + "\n     Author: " + HEAD.author + "\n     Message: " + HEAD.message + "\n";
 			if (HEAD.parent != null) {
 				answer += "     Parent: " + HEAD.parent.ID + "\n \n";
 			} else {
@@ -193,7 +274,9 @@ public class ClientRepository implements VcsProtocol, Serializable {
 		File[] fileList = directory.listFiles();
 		if (fileList.length-index.size() != 2) {
 			for (File file : fileList) {
-				if (file.isFile() && (!file.getName().equals(".DS_Store")) && (!index.contains(file.getName()))) {
+				String fileName = file.getName();
+				String extension = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length());
+				if (file.isFile() && (!fileName.equals(".DS_Store")) && (!index.contains(fileName)) && (!extension.equals("key"))) {
 					answer += "\t #" + file.getName() + "\n";
 				}
 			}
@@ -211,6 +294,8 @@ public class ClientRepository implements VcsProtocol, Serializable {
 		}
 		return answer;
 	}
+	
+	
 
 	public void emptyIndex() throws IOException {
 		index.clear();
@@ -242,20 +327,24 @@ public class ClientRepository implements VcsProtocol, Serializable {
 				File projectfile = new File(projectpath);
 
 				if (projectfile.isFile()) {
-					boolean validAnswer = false;
-					System.out.println("#Conflict: \"" + projectfile.getName() + "\" exists already in your project. \n Do you want to override the file with the file from the server or keep the file unmodified? \n Write \"o\" to override or \"u\" to keep the file unmodified");
-					while (!validAnswer) {
-						System.out.print("> ");
-						String answer = consoleInput.readLine();
-						if (answer.equals("o")) {
-							validAnswer = true;
-							directory.putFile(headpath);  	
-						} else if (answer.equals("u")) {
-							validAnswer = true;
-						} else {
-							System.out.println(" Please give a valid answer");
+					SHA1 headfileHash = new SHA1(Utilities.FileToByteArray(headfile));
+					SHA1 projectfileHash = new SHA1(Utilities.FileToByteArray(projectfile));
+					if (!headfileHash.getSHA1().equals(projectfileHash.getSHA1())) {
+						boolean validAnswer = false;
+						System.out.println("#Conflict: \"" + projectfile.getName() + "\" exists already in your project and isn't equal as the file on the server. \n Do you want to override the file with the file from the server or keep the file unmodified? \n Write \"o\" to override or \"u\" to keep the file unmodified");
+						while (!validAnswer) {
+							System.out.print("> ");
+							String answer = consoleInput.readLine();
+							if (answer.equals("o")) {
+								validAnswer = true;
+								directory.putFile(headpath);  	
+							} else if (answer.equals("u")) {
+								validAnswer = true;
+							} else {
+								System.out.println(" Please give a valid answer");
+							}
 						}
-					}	
+					} 
 				} else {
 					directory.putFile(headpath);  
 				}

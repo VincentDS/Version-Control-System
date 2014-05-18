@@ -7,21 +7,15 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.LinkedList;
 import java.util.List;
 
 
-
-/*
- * Compile in terminal: javac -cp external/diffutils-1.2.1.jar *.java
- * Run in terminal: 
- * 		Server: java -cp .:external/diffutils-1.2.1.jar VcsServer 8080
- * 		Client: java -cp .:external/diffutils-1.2.1.jar VcsClient
- */
-
 public class Utilities {
 
-	public static void sendFile(String fileName, ObjectOutputStream os) {
+	public static void sendFile(String fileName, ObjectOutputStream os, PublicKey publicKey) {
 		FileObject fileObject = new FileObject();
 		File file = new File(fileName);
 		fileObject.setFilename(file.getName());
@@ -37,7 +31,8 @@ public class Utilities {
 					fileBytes.length - read)) >= 0) {
 				read = read + numRead;
 			}
-			fileObject.setFileData(fileBytes);
+			byte[] encryptedFileBytes = RSA.encrypt(fileBytes, publicKey);
+			fileObject.setFileData(encryptedFileBytes);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -49,13 +44,15 @@ public class Utilities {
 		}
 	}
 
-	public static void receiveFile(ObjectInputStream is, String directoryPath) {
+	public static void receiveFile(ObjectInputStream is, String directoryPath, PrivateKey privateKey) {
 		try {
 			FileObject FileObject = (FileObject) is.readObject();
 			String outputFile = directoryPath + File.separator +  FileObject.getFilename();
 			File file = new File(outputFile);
 			FileOutputStream fileOutputStream = new FileOutputStream(file);
-			fileOutputStream.write(FileObject.getFileData());
+			byte[] encryptedFileBytes = FileObject.getFileData();
+			byte[] decryptedFileBytes = RSA.decrypt(encryptedFileBytes, privateKey);
+			fileOutputStream.write(decryptedFileBytes);
 			fileOutputStream.flush();
 			fileOutputStream.close();
 			//System.out.println("Output file : " + outputFile + " is successfully saved ");
@@ -74,10 +71,19 @@ public class Utilities {
                 while ((line = in.readLine()) != null) {
                         lines.add(line);
                 }
+                in.close();
         } catch (IOException e) {
                 e.printStackTrace();
         }
         return lines;
-}
+	}
+	
+	public static byte[] FileToByteArray(File file) throws IOException {
+		byte[] buffer = new byte[(int) file.length()];
+		FileInputStream fis = new FileInputStream(file);
+		fis.read(buffer);
+		fis.close();
+		return buffer;
+	}
 }
 

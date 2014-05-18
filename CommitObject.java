@@ -17,15 +17,17 @@ public class CommitObject implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public ClientRepository repo;
 	public List<String> files;
+	public String author;
 	public String message;
 	public String ID;
 	public CommitObject parent;
 	//public String CurrentObjectDirectory;
 	
-	public CommitObject(ClientRepository repo, CommitObject parent, String message) throws IOException {
+	public CommitObject(ClientRepository repo, CommitObject parent, String message, String author) throws IOException {
 		this.repo = repo;
 		this.parent = parent;
 		this.message = message;
+		this.author = author;
 		files = repo.index;
 	
 		//unique ID creeren
@@ -60,6 +62,7 @@ public class CommitObject implements Serializable {
 		}
 		return buffer;
 	}
+	
 	
 	final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
 	public static String bytesToHex(byte[] bytes) {
